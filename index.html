@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Resume Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+    <div class="container">
+        <header class="hero card">
+            <h1>AI Resume Analyzer</h1>
+            <p>Upload one or more resumes, compare against a job description, and get ATS + keyword insights.</p>
+        </header>
+
+        <section class="card form-card">
+            <form
+                id="analyze-form"
+                method="POST"
+                enctype="multipart/form-data"
+                action="{{ url_for('index') }}"
+            >
+                <div class="form-group">
+                    <label for="resumes">Upload Resume(s) (PDF/DOCX)</label>
+                    <input id="resumes" type="file" accept=".pdf,.docx" multiple />
+                    <div class="upload-meta">
+                        <span id="fileCount" class="muted">No files selected</span>
+                    </div>
+                    <ul id="fileList" class="file-list">
+                        <li class="file-empty muted">No files selected</li>
+                    </ul>
+                </div>
+
+                <div class="form-group">
+                    <label for="job_description">Job Description</label>
+                    <textarea
+                        id="job_description"
+                        name="job_description"
+                        placeholder="Paste the full job description here..."
+                        required
+                    >{{ job_description }}</textarea>
+                </div>
+
+                <button type="submit">Analyze Resumes</button>
+            </form>
+        </section>
+
+        {% if errors %}
+        <section class="card errors">
+            <h3>Notes</h3>
+            <ul>
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        {% if results %}
+        {% if summary %}
+        <section class="card summary-card">
+            <h3>Analysis Summary</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="summary-label">Total Resumes</span>
+                    <span class="summary-value">{{ summary.total_resumes }}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Accepted</span>
+                    <span class="summary-value accept-text">{{ summary.accepted }}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Rejected</span>
+                    <span class="summary-value reject-text">{{ summary.rejected }}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Best Candidate</span>
+                    <span class="summary-value">{{ summary.best_candidate }}</span>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="results">
+            {% for result in results %}
+            <article class="card result-card {% if result.is_top_candidate %}top-candidate{% endif %}">
+                <div class="result-header">
+                    <h2>{{ result.resume_name }}</h2>
+                    <div class="header-badges">
+                        <span class="rank-chip">Rank #{{ result.rank }}</span>
+                        <span class="decision-chip {% if result.decision == 'ACCEPT' %}accept{% else %}reject{% endif %}">
+                            {{ result.decision }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="scores">
+                    <div class="metric">
+                        <div class="metric-title">Final Match Score</div>
+                        <div class="metric-value">{{ result.final_score }}%</div>
+                        <div class="progress">
+                            <div class="bar final" style="width: {{ result.final_score }}%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="metric">
+                        <div class="metric-title">Similarity Score</div>
+                        <div class="metric-value">{{ result.similarity_pct }}%</div>
+                        <div class="progress">
+                            <div class="bar match" style="width: {{ result.similarity_pct }}%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="metric">
+                        <div class="metric-title">ATS Score</div>
+                        <div class="metric-value">{{ result.ats_score }}%</div>
+                        <div class="progress">
+                            <div class="bar ats" style="width: {{ result.ats_score }}%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="metric">
+                        <div class="metric-title">Keyword Match</div>
+                        <div class="metric-value">{{ result.keyword_score }}%</div>
+                        <div class="progress">
+                            <div class="bar keyword" style="width: {{ result.keyword_score }}%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="metric">
+                        <div class="metric-title">Skill Relevance</div>
+                        <div class="metric-value">{{ result.skill_relevance }}%</div>
+                        <div class="progress">
+                            <div class="bar skill" style="width: {{ result.skill_relevance }}%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="keyword-grid">
+                    <div>
+                        <h4>Matched Keywords</h4>
+                        <div class="tags tags-match">
+                            {% if result.matched_keywords %}
+                                {% for item in result.matched_keywords %}
+                                    <span class="tag">{{ item }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="muted">No matched keywords found.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4>Missing Keywords</h4>
+                        <div class="tags tags-missing">
+                            {% if result.missing_keywords %}
+                                {% for item in result.missing_keywords %}
+                                    <span class="tag">{{ item }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="muted">No missing keywords detected.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h4>Top Resume Keywords</h4>
+                    <div class="tags tags-neutral">
+                        {% for kw, count in result.top_resume_keywords %}
+                            <span class="tag">{{ kw }} ({{ count }})</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div>
+                    <h4>AI Improvement Suggestions</h4>
+                    <ul class="suggestions">
+                        {% for suggestion in result.suggestions %}
+                            <li>{{ suggestion }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </article>
+            {% endfor %}
+        </section>
+        {% endif %}
+    </div>
+    <script>
+        /** Global list used for multi-select append + manual FormData submit (Flask: getlist("resumes")). */
+        var selectedFiles = [];
+
+        (function () {
+            var fileInput = document.getElementById("resumes");
+            var fileList = document.getElementById("fileList");
+            var fileCount = document.getElementById("fileCount");
+            var form = document.getElementById("analyze-form");
+            var jobDescription = document.getElementById("job_description");
+
+            function fileKey(file) {
+                return file.name + "__" + file.size + "__" + file.lastModified;
+            }
+
+            function formatBytes(bytes) {
+                if (!bytes && bytes !== 0) return "";
+                var units = ["B", "KB", "MB", "GB"];
+                var size = bytes;
+                var unit = 0;
+                while (size >= 1024 && unit < units.length - 1) {
+                    size /= 1024;
+                    unit += 1;
+                }
+                return size.toFixed(unit === 0 ? 0 : 1) + " " + units[unit];
+            }
+
+            function removeFileByKey(key) {
+                selectedFiles = selectedFiles.filter(function (f) {
+                    return fileKey(f) !== key;
+                });
+                console.log(selectedFiles);
+            }
+
+            function renderFiles() {
+                fileList.innerHTML = "";
+
+                if (selectedFiles.length === 0) {
+                    fileCount.textContent = "No files selected";
+                    var emptyItem = document.createElement("li");
+                    emptyItem.className = "file-empty muted";
+                    emptyItem.textContent = "No files selected";
+                    fileList.appendChild(emptyItem);
+                    return;
+                }
+
+                fileCount.textContent =
+                    selectedFiles.length +
+                    " resume" +
+                    (selectedFiles.length > 1 ? "s" : "") +
+                    " selected";
+
+                selectedFiles.forEach(function (file) {
+                    var key = fileKey(file);
+                    var item = document.createElement("li");
+                    item.className = "file-item";
+
+                    var fileInfo = document.createElement("div");
+                    fileInfo.className = "file-info";
+                    fileInfo.innerHTML =
+                        '<span class="file-name"></span><span class="file-size muted"></span>';
+                    fileInfo.querySelector(".file-name").textContent = file.name;
+                    fileInfo.querySelector(".file-size").textContent = formatBytes(file.size);
+
+                    var removeBtn = document.createElement("button");
+                    removeBtn.type = "button";
+                    removeBtn.className = "remove-file-btn";
+                    removeBtn.setAttribute("aria-label", "Remove " + file.name);
+                    removeBtn.textContent = "❌";
+                    removeBtn.addEventListener("click", function () {
+                        removeFileByKey(key);
+                        renderFiles();
+                    });
+
+                    item.appendChild(fileInfo);
+                    item.appendChild(removeBtn);
+                    fileList.appendChild(item);
+                });
+            }
+
+            fileInput.addEventListener("change", function (event) {
+                var incoming = Array.from(event.target.files || []);
+                var existingKeys = new Set(selectedFiles.map(fileKey));
+
+                incoming.forEach(function (file) {
+                    var isPdfOrDocx = /\.pdf$|\.docx$/i.test(file.name);
+                    var key = fileKey(file);
+                    if (isPdfOrDocx && !existingKeys.has(key)) {
+                        selectedFiles.push(file);
+                        existingKeys.add(key);
+                    }
+                });
+
+                console.log(selectedFiles);
+                renderFiles();
+                fileInput.value = "";
+            });
+
+            form.addEventListener("submit", function (e) {
+                e.preventDefault();
+
+                var jd = (jobDescription.value || "").trim();
+                if (!jd) {
+                    jobDescription.reportValidity();
+                    return;
+                }
+                if (selectedFiles.length === 0) {
+                    alert("Please select at least one resume (PDF or DOCX).");
+                    return;
+                }
+
+                var formData = new FormData();
+                formData.append("job_description", jd);
+                selectedFiles.forEach(function (file) {
+                    formData.append("resumes", file);
+                });
+
+                console.log(selectedFiles);
+
+                fetch(form.action, {
+                    method: "POST",
+                    body: formData,
+                })
+                    .then(function (res) {
+                        return res.text();
+                    })
+                    .then(function (html) {
+                        document.open();
+                        document.write(html);
+                        document.close();
+                    })
+                    .catch(function (err) {
+                        console.error(err);
+                        alert("Upload failed. Check the console for details.");
+                    });
+            });
+
+            renderFiles();
+        })();
+    </script>
+</body>
+</html>
